@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Swapp Service Request Management Platform
 
-## Getting Started
+Internal ticketing platform for Customer Support and Operations to log, assign, and track service requests with SLA monitoring.
 
-First, run the development server:
+## Setup
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Supabase
+
+- Create a project at [supabase.com](https://supabase.com).
+- In **SQL Editor** → New query, run the entire contents of:
+  - `supabase/migrations/001_swapp_schema.sql`
+- In **Authentication** → Providers, enable **Email** (and optionally disable “Confirm email” for local testing).
+- Copy **Project URL** and **anon key** (and **service role key** for admin features) into `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+### 3. First admin user
+
+New signups get the **Customer Support** role by default. To make the first user an admin:
+
+1. Sign up once via the app.
+2. In Supabase **SQL Editor** run:
+
+```sql
+update public.profiles
+set role = 'admin'
+where id = (select id from auth.users order by created_at asc limit 1);
+```
+
+### 4. Run the app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Sign in and use **Dashboard** → **Tickets** and **Admin** (if you are admin/operations manager).
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Roles
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Role                 | Can create tickets | Can see tickets        | Can update status / assign | Admin (users, SLA, suppliers) |
+|----------------------|--------------------|------------------------|----------------------------|------------------------------|
+| Customer Support     | Yes                | Own                    | Own                        | No                           |
+| Operations           | No                 | Assigned to me         | Assigned                   | No                           |
+| Operations Manager   | No                 | All                    | All                        | View only (no user management) |
+| Admin                | Yes                | All                    | All                        | Full                         |
 
-## Learn More
+## Features
 
-To learn more about Next.js, take a look at the following resources:
+- **Ticket creation**: Booking ID, supplier, issue type, priority, description, customer name/contact, number plate.
+- **Ticket lifecycle**: New → Assigned → In progress → Waiting on supplier/customer → Resolved → Closed.
+- **Assignment**: Manual (admin/operations manager) or leave unassigned.
+- **SLA**: Rules per issue type (hours). Deadline set on create; breach can be marked manually; “SLA breaching soon” filter (e.g. &lt; 30 min).
+- **Filters**: Pending, Assigned to me, SLA breaching soon, High priority, By supplier.
+- **Internal notes**: Add notes on ticket detail; view history.
+- **Reporting** (operations manager / admin): Volume, resolved within SLA, breached count, avg resolution time, by issue type, by supplier.
+- **Admin**: Manage users (roles), suppliers, issue types, SLA rules.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notifications
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Email/Slack notifications (new assignment, SLA breach warning, status updates) are not implemented in this repo. Add them via Supabase Edge Functions, a cron job, or your preferred provider (e.g. Resend, Slack API).

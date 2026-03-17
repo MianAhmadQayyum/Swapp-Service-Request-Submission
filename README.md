@@ -1,8 +1,12 @@
-# Swapp Service Request Management Platform
+# Swapp Internal Ticketing System
 
-Internal ticketing platform for Customer Support and Operations to log, assign, and track service requests with SLA monitoring.
+Internal service request management platform for Customer Support and Operations teams to log, assign, and track service requests with SLA monitoring.
 
-## Setup
+**Stack:** Next.js 16 (App Router) · React 19 · Supabase (PostgreSQL + Auth) · Tailwind CSS v4
+
+---
+
+## Quick Start
 
 ### 1. Install dependencies
 
@@ -10,61 +14,115 @@ Internal ticketing platform for Customer Support and Operations to log, assign, 
 npm install
 ```
 
-### 2. Supabase
-
-- Create a project at [supabase.com](https://supabase.com).
-- In **SQL Editor** → New query, run the entire contents of:
-  - `supabase/migrations/001_swapp_schema.sql`
-- In **Authentication** → Providers, enable **Email** (and optionally disable “Confirm email” for local testing).
-- Copy **Project URL** and **anon key** (and **service role key** for admin features) into `.env.local`:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-```
-
-### 3. First admin user
-
-New signups get the **Customer Support** role by default. To make the first user an admin:
-
-1. Sign up once via the app.
-2. In Supabase **SQL Editor** run:
-
-```sql
-update public.profiles
-set role = 'admin'
-where id = (select id from auth.users order by created_at asc limit 1);
-```
-
-### 4. Run the app
+### 2. Configure environment
 
 ```bash
-npm run dev
+cp .env.example .env.local
+# Then open .env.local and fill in your Supabase project URL and keys.
+# Find them in: Supabase dashboard → Project Settings → API
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in and use **Dashboard** → **Tickets** and **Admin** (if you are admin/operations manager).
+### 3. Apply database migrations
 
-## Roles
+In the Supabase **SQL Editor**, run each file under `supabase/migrations/` in order (001 → 016).
+See [`supabase/README.md`](supabase/README.md) for details.
 
-| Role                 | Can create tickets | Can see tickets        | Can update status / assign | Admin (users, SLA, suppliers) |
-|----------------------|--------------------|------------------------|----------------------------|------------------------------|
-| Customer Support     | Yes                | Own                    | Own                        | No                           |
-| Operations           | No                 | Assigned to me         | Assigned                   | No                           |
-| Operations Manager   | No                 | All                    | All                        | View only (no user management) |
-| Admin                | Yes                | All                    | All                        | Full                         |
+### 4. Create your first admin
 
-## Features
+New signups default to the `customer_support` role. Promote the first user to admin via SQL:
 
-- **Ticket creation**: Booking ID, supplier, issue type, priority, description, customer name/contact, number plate.
-- **Ticket lifecycle**: New → Assigned → In progress → Waiting on supplier/customer → Resolved → Closed.
-- **Assignment**: Manual (admin/operations manager) or leave unassigned.
-- **SLA**: Rules per issue type (hours). Deadline set on create; breach can be marked manually; “SLA breaching soon” filter (e.g. &lt; 30 min).
-- **Filters**: Pending, Assigned to me, SLA breaching soon, High priority, By supplier.
-- **Internal notes**: Add notes on ticket detail; view history.
-- **Reporting** (operations manager / admin): Volume, resolved within SLA, breached count, avg resolution time, by issue type, by supplier.
-- **Admin**: Manage users (roles), suppliers, issue types, SLA rules.
+```sql
+UPDATE public.profiles
+SET role = 'admin'
+WHERE id = (SELECT id FROM auth.users ORDER BY created_at ASC LIMIT 1);
+```
 
-## Notifications
+### 5. Run the app
 
-Email/Slack notifications (new assignment, SLA breach warning, status updates) are not implemented in this repo. Add them via Supabase Edge Functions, a cron job, or your preferred provider (e.g. Resend, Slack API).
+```bash
+npm run dev   # http://localhost:3000
+```
+
+---
+
+## Architecture Overview
+
+```
+src/
+├── middleware.js           # Next.js middleware: session refresh + /dashboard auth guard
+├── app/                    # Next.js App Router — pages + server actions
+│   ├── signin/             # Email/password sign-in (client component)
+│   ├── signup/             # Registration with role + team selection (client component)
+│   └── dashboard/          # Protected app shell
+│       ├── tickets/        # Ticket list, creation, detail
+│       └── admin/          # Admin panel: users, teams, suppliers, issue types
+├── components/             # Shared UI components (SignOutButton, Spinner, …)
+└── lib/
+    ├── supabase/           # Client factories (browser, server, service-role) + middleware
+    └── constants/          # Role helpers, ticket statuses, filter logic
+
+supabase/
+└── migrations/             # 16 numbered SQL migrations (source of truth for schema)
+```
+
+### Core Design Principles
+
+1. **No API routes** — All mutations use Next.js Server Actions. There is no `app/api/` directory.
+2. **Defense-in-depth access control** — RLS policies (database level) AND application-level role checks (server components + server actions) enforce permissions independently.
+3. **Server-first rendering** — Data fetching happens in server components; client components handle interactivity only.
+4. **`cache()` for auth** — `getCachedUser()` deduplicates `auth.getUser()` across layout + page within a single request.
+
+---
+
+## User Roles
+
+| Role | Label shown | Create tickets | View stats | Update tickets | Admin panel |
+|---|---|---|---|---|---|
+| `customer_support` | "Customer Support" | Yes | No | No | No |
+| `team_member` | Their team's name | No | Yes | Yes (own team only) | No |
+| `admin` | "Admin" | Yes | Yes (all teams) | Yes | Yes |
+
+Role logic lives in [`src/lib/constants/roles.js`](src/lib/constants/roles.js).
+
+---
+
+## Ticket Lifecycle
+
+```
+customer_support creates ticket → status: in_progress
+                                        ↕
+                             waiting_for_supplier
+                                        ↕
+                             waiting_for_customer
+                                        ↓
+                                    resolved
+```
+
+- Created by `customer_support` or `admin`
+- Assigned to a team (not an individual)
+- `team_member` users update status and notes for tickets assigned to their team
+- `admin` can view/update any ticket
+
+---
+
+## Key Features
+
+- **Ticket creation** — Booking ID, supplier, issue category, description, CS agent, assigned team, escalation flag, service request flag (+ car plate + odometer)
+- **Ticket management** — Status updates, free-text notes
+- **SLA tracking** — Per issue-type SLA hours; breach computed in the `get_ticket_stats()` RPC
+- **Dashboard stats** — Total, open, resolved, avg resolution time, SLA %, by supplier, by issue type
+- **Team filter** — Admins filter stats by team via `?team=<uuid>` query param
+- **Admin panel** — Manage users (role/team/enable/disable), teams, suppliers, issue types + SLA
+
+---
+
+## Documentation Index
+
+| Document | What it covers |
+|---|---|
+| [`src/lib/AUTH_AND_CONSTANTS.md`](src/lib/AUTH_AND_CONSTANTS.md) | Auth flow, Supabase clients, roles, statuses, how to add new roles/statuses |
+| [`src/app/dashboard/DASHBOARD.md`](src/app/dashboard/DASHBOARD.md) | Dashboard layout, stats, team filter, permission enforcement |
+| [`src/app/dashboard/tickets/TICKETS.md`](src/app/dashboard/tickets/TICKETS.md) | Ticket CRUD, filters, adding new ticket fields |
+| [`src/app/dashboard/admin/ADMIN.md`](src/app/dashboard/admin/ADMIN.md) | Admin panel, user management, adding new admin actions |
+| [`supabase/DATABASE_SCHEMA.md`](supabase/DATABASE_SCHEMA.md) | Full DB schema, enums, RLS policies, DB functions, how to migrate |
+| [`supabase/migrations/MIGRATION_HISTORY.md`](supabase/migrations/MIGRATION_HISTORY.md) | Migration history — what each migration changed and why |

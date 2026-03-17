@@ -1,41 +1,28 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { FILTERS } from "@/lib/constants/tickets";
 
-const FILTERS = [
-  { value: "", label: "All" },
-  { value: "pending", label: "Pending" },
-  { value: "assigned_to_me", label: "Assigned to me" },
-  { value: "sla_breaching", label: "SLA breaching soon" },
-  { value: "high_priority", label: "High priority" },
-];
-
-export default function TicketFilters({ currentFilter, supplierId, suppliers }) {
+export default function TicketFilters({ currentFilter, supplierId, suppliers, teamId, teams }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  function setFilter(filter) {
+  function setParam(key, value) {
     const p = new URLSearchParams(searchParams?.toString() || "");
-    if (filter) p.set("filter", filter);
-    else p.delete("filter");
-    router.push(`/dashboard/tickets?${p.toString()}`);
-  }
-
-  function setSupplier(id) {
-    const p = new URLSearchParams(searchParams?.toString() || "");
-    if (id) p.set("supplier", id);
-    else p.delete("supplier");
+    if (value) p.set(key, value);
+    else p.delete(key);
+    p.delete("page");
     router.push(`/dashboard/tickets?${p.toString()}`);
   }
 
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {FILTERS.map((f) => (
           <button
             key={f.value || "all"}
             type="button"
-            onClick={() => setFilter(f.value)}
+            onClick={() => setParam("filter", f.value)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               currentFilter === f.value
                 ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
@@ -49,14 +36,24 @@ export default function TicketFilters({ currentFilter, supplierId, suppliers }) 
       {suppliers.length > 0 && (
         <select
           value={supplierId || ""}
-          onChange={(e) => setSupplier(e.target.value)}
+          onChange={(e) => setParam("supplier", e.target.value)}
           className="rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm px-3 py-1.5"
         >
           <option value="">All suppliers</option>
           {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
+            <option key={s.id} value={s.id}>{s.title}</option>
+          ))}
+        </select>
+      )}
+      {teams?.length > 0 && (
+        <select
+          value={teamId || ""}
+          onChange={(e) => setParam("team", e.target.value)}
+          className="rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm px-3 py-1.5"
+        >
+          <option value="">All teams</option>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
       )}

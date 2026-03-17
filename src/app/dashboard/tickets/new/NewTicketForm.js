@@ -3,100 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createTicket } from "../actions";
+import { canViewDashboard } from "@/lib/constants/roles";
 
-const SUPPLIERS = [
-  "Thrifty DXB",
-  "Dollar DXB",
-  "Shift DXB",
-  "Legend world Rent A Car (DXB)",
-  "Diamondlease",
-  "Swapp - Diamondlease",
-  "Swapp - Morning Star",
-  "Swapp - Avis",
-  "Swapp - Paramount",
-  "Swapp - Hertz",
-  "Swapp - Legend",
-  "Swapp - Yaseer",
-  "Swapp - Ok Mobility",
-  "Thrifty AUH",
-  "Dollar AUH",
-  "Legend world Rent A Car (AUH)",
-  "Automates Auto Rentals LLC",
-  "Swapp-Shift",
-  "Paramount",
-  "Others",
-  "Thrifty Al Ain",
-];
-
-const ISSUE_CATEGORIES = [
-  "Handovers - Features Missing",
-  "Handovers - Car Not Available",
-  "Handovers - Poor Car Condition",
-  "Handovers - Supplier Delay",
-  "Handovers - Rude Behaviour",
-  "Service Requests & Replacements - Delay",
-  "Service Requests & Replacements - Poor Handling(Driver, Care)",
-  "Service Requests & Replacements - Faulty Replacement",
-  "Service Requests & Replacements - Damage Charges",
-  "Payments - Rental Fee",
-  "Payments - Damages",
-  "Payments - Extra Miles",
-  "Payments - Fuel",
-  "Payments - Cleaning Charges",
-  "Payments - Parking",
-  "Payments - Discount Coupon",
-  "Payments-Fines",
-  "Payments - Saliks",
-  "Handbacks - Supplier Delay",
-  "Handbacks - Rude Behaviour",
-  "KYC & Pre-Booking - Delayed Approval",
-  "KYC & Pre-Booking - Booking Rejected",
-  "KYC & Pre-Booking - Poor Communication",
-  "Care Handling - Incorrect Information",
-  "Care Handling - Lack of Empathy",
-  "Care Handling - Excessive Interactions",
-  "Care Handling - Internal Mistake",
-  "Other",
-];
-
-const CS_AGENTS = [
-  "Rim",
-  "Beenish",
-  "Malaika",
-  "Maryam",
-  "Saqlain",
-  "Shabbar",
-  "Roshaan",
-  "Mahnur",
-  "Rafia",
-  "Tariq",
-  "Elio",
-  "Anthony",
-  "Joe",
-  "Joyce",
-  "Sara",
-];
-
-const YES_NO = [
-  { value: "Yes", label: "Yes" },
-  { value: "No", label: "No" },
-];
-
-const TEAM_ASSIGNED = [
-  "Operations",
-  "Logistics",
-  "Charging Team",
-  "Debt Collection",
-  "Supply Team",
-  "Damages & FC",
-];
-
-export default function NewTicketForm() {
+export default function NewTicketForm({ suppliers, issueTypes, csAgents, teams, role }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [serviceRequestOpened, setServiceRequestOpened] = useState("");
-  const showServiceFields = serviceRequestOpened === "Yes";
+  const [serviceRequest, setServiceRequest] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -109,15 +22,28 @@ export default function NewTicketForm() {
       setError(result.error);
       return;
     }
-    router.push(result.ticketId ? `/dashboard/tickets/${result.ticketId}` : "/dashboard/tickets");
+    router.push(
+      canViewDashboard(role) && result.ticketId
+        ? `/dashboard/tickets/${result.ticketId}`
+        : "/dashboard/tickets"
+    );
     router.refresh();
   }
 
+  const inputCls =
+    "w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
+  const labelCls =
+    "block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1";
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-6">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-6"
+    >
+      {/* Row 1: Booking ID + Supplier */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="booking_id" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          <label htmlFor="booking_id" className={labelCls}>
             Booking ID *
           </label>
           <input
@@ -125,156 +51,158 @@ export default function NewTicketForm() {
             name="booking_id"
             type="text"
             required
-            placeholder="Short answer"
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+            placeholder="e.g. BKG-12345"
+            className={inputCls}
           />
         </div>
         <div>
-          <label htmlFor="supplier" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          <label htmlFor="supplier_id" className={labelCls}>
             Supplier *
           </label>
-          <select
-            id="supplier"
-            name="supplier"
-            required
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-          >
+          <select id="supplier_id" name="supplier_id" required className={inputCls}>
             <option value="">Select supplier</option>
-            {SUPPLIERS.map((s) => (
-              <option key={s} value={s}>{s}</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
             ))}
           </select>
         </div>
       </div>
+
+      {/* Row 2: CS Agent + Issue Category */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="cs_agent" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          <label htmlFor="cs_agent_id" className={labelCls}>
             CS Agent *
           </label>
-          <select
-            id="cs_agent"
-            name="cs_agent"
-            required
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-          >
+          <select id="cs_agent_id" name="cs_agent_id" required className={inputCls}>
             <option value="">Select CS agent</option>
-            {CS_AGENTS.map((a) => (
-              <option key={a} value={a}>{a}</option>
+            {csAgents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
             ))}
           </select>
         </div>
         <div>
-          <label htmlFor="issue_category" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          <label htmlFor="issue_category_id" className={labelCls}>
             Issue Category *
           </label>
           <select
-            id="issue_category"
-            name="issue_category"
+            id="issue_category_id"
+            name="issue_category_id"
             required
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+            className={inputCls}
           >
             <option value="">Select issue category</option>
-            {ISSUE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
+            {issueTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
             ))}
           </select>
         </div>
       </div>
+
+      {/* Issue Description */}
       <div>
-        <label htmlFor="description" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+        <label htmlFor="issue_description" className={labelCls}>
           Issue Description *
         </label>
         <textarea
-          id="description"
-          name="description"
+          id="issue_description"
+          name="issue_description"
           rows={4}
           required
-          placeholder="Short answer"
-          className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+          placeholder="Describe the issue"
+          className={inputCls}
         />
       </div>
+
+      {/* Row 3: Assignee Team + Escalation */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="escalation_status" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-            Escalation Status *
+          <label htmlFor="assignee_team_id" className={labelCls}>
+            Assign to Team *
           </label>
           <select
+            id="assignee_team_id"
+            name="assignee_team_id"
+            required
+            className={inputCls}
+          >
+            <option value="">Select team</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-3 pt-6">
+          <input
             id="escalation_status"
             name="escalation_status"
-            required
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-          >
-            <option value="">Select</option>
-            {YES_NO.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="service_request_opened" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-            Service Request Opened (Yes/No) *
+            type="checkbox"
+            value="true"
+              className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600 text-red-600 focus:ring-red-500"
+          />
+          <label htmlFor="escalation_status" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Mark as escalated
           </label>
-          <select
-            id="service_request_opened"
-            name="service_request_opened"
-            required
-            value={serviceRequestOpened}
-            onChange={(e) => setServiceRequestOpened(e.target.value)}
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-          >
-            <option value="">Select</option>
-            {YES_NO.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
         </div>
       </div>
-      {showServiceFields && (
+
+      {/* Service Request toggle */}
+      <div className="flex items-center gap-3">
+        <input
+          id="service_request_status"
+          name="service_request_status"
+          type="checkbox"
+          value="true"
+          onChange={(e) => setServiceRequest(e.target.checked)}
+          className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600 text-emerald-600 focus:ring-emerald-500"
+        />
+        <label htmlFor="service_request_status" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Service request opened
+        </label>
+      </div>
+
+      {/* Conditional: car plate + odometer */}
+      {serviceRequest && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="number_plate" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label htmlFor="car_plate" className={labelCls}>
               Car Number Plate
             </label>
             <input
-              id="number_plate"
-              name="number_plate"
+              id="car_plate"
+              name="car_plate"
               type="text"
               placeholder="e.g. ABC 1234"
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              className={inputCls}
             />
           </div>
           <div>
-            <label htmlFor="odometer_reading" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              Odometer reading (in case of service due)
+            <label htmlFor="odometer" className={labelCls}>
+              Odometer Reading
             </label>
             <input
-              id="odometer_reading"
-              name="odometer_reading"
+              id="odometer"
+              name="odometer"
               type="text"
               placeholder="e.g. 45000 km"
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              className={inputCls}
             />
           </div>
         </div>
       )}
-      <div>
-        <label htmlFor="team_assigned" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-          Team Assigned
-        </label>
-        <select
-          id="team_assigned"
-          name="team_assigned"
-          className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-        >
-          <option value="">Select team</option>
-          {TEAM_ASSIGNED.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-      </div>
+
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
+
       <div className="flex gap-3">
         <button
           type="submit"

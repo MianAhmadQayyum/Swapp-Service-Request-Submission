@@ -1,80 +1,75 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createClient, getCachedUser, getCachedProfile } from "@/lib/supabase/server";
 import AdminUsers from "./AdminUsers";
-import AdminSuppliers from "./AdminSuppliers";
+import AdminSimpleList from "./AdminSimpleList";
 import AdminIssueTypes from "./AdminIssueTypes";
-import AdminSlaRules from "./AdminSlaRules";
+import { createSupplier, deleteSupplier, createTeam, deleteTeam } from "./actions";
+import { canAccessAdmin } from "@/lib/constants/roles";
 
 export default async function AdminPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCachedUser();
   if (!user) redirect("/signin");
+  const supabase = await createClient();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const profile = await getCachedProfile();
+  if (!canAccessAdmin(profile?.role)) redirect("/dashboard");
 
-  if (profile?.role !== "admin" && profile?.role !== "operations_manager") {
-    redirect("/dashboard");
-  }
-
-  const isAdmin = profile?.role === "admin";
-
-  const [{ data: suppliers }, { data: issueTypes }, { data: slaRules }] = await Promise.all([
-    supabase.from("suppliers").select("id, name").order("name"),
-    supabase.from("issue_types").select("id, name").order("name"),
-    supabase
-      .from("sla_rules")
-      .select("id, resolution_hours, priority_level, issue_types(name)")
-      .order("resolution_hours"),
+  const [
+    { data: suppliers },
+    { data: issueTypes },
+    { data: teams },
+    { data: profiles },
+  ] = await Promise.all([
+    supabase.from("suppliers").select("id, title").order("title"),
+    supabase.from("issue_types").select("id, title, sla_resolution_hours_limit").order("title"),
+    supabase.from("teams").select("id, name").order("name"),
+    supabase.from("profiles").select("id, name, email, role, team_id, disabled").order("name"),
   ]);
-
-  let authUsers = [];
-  if (isAdmin) {
-    const adminClient = createServiceRoleClient();
-    const { data: list } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-    authUsers = list?.users ?? [];
-  }
-
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, full_name, role, team")
-    .order("full_name");
-
-  const profilesById = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
 
   return (
     <div className="space-y-8">
       <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">Admin</h2>
-      {isAdmin && (
-        <section>
-          <h3 className="text-md font-medium text-zinc-800 dark:text-zinc-200 mb-4">
-            Manage users & roles
-          </h3>
-          <AdminUsers
-            authUsers={authUsers}
-            profiles={profiles ?? []}
-            profilesById={profilesById}
-          />
-        </section>
-      )}
+
+      <section>
+        <h3 className="text-md font-medium text-zinc-800 dark:text-zinc-200 mb-4">
+          Users &amp; roles
+        </h3>
+        <AdminUsers
+          profiles={profiles ?? []}
+          teams={teams ?? []}
+        />
+      </section>
+
+      <section>
+        <h3 className="text-md font-medium text-zinc-800 dark:text-zinc-200 mb-4">Teams</h3>
+        <AdminSimpleList
+          items={(teams ?? []).map((t) => ({ id: t.id, label: t.name }))}
+          fieldName="name"
+          placeholder="Team name"
+          onCreate={createTeam}
+          onDelete={deleteTeam}
+        />
+      </section>
+
       <section>
         <h3 className="text-md font-medium text-zinc-800 dark:text-zinc-200 mb-4">Suppliers</h3>
-        <AdminSuppliers suppliers={suppliers ?? []} canEdit={isAdmin} />
+        <AdminSimpleList
+          items={(suppliers ?? []).map((s) => ({ id: s.id, label: s.title }))}
+          fieldName="title"
+          placeholder="Supplier name"
+          onCreate={createSupplier}
+          onDelete={deleteSupplier}
+        />
       </section>
+
       <section>
-        <h3 className="text-md font-medium text-zinc-800 dark:text-zinc-200 mb-4">Issue types</h3>
-        <AdminIssueTypes issueTypes={issueTypes ?? []} canEdit={isAdmin} />
+        <h3 className="text-md font-medium text-zinc-800 dark:text-zinc-200 mb-4">
+          Issue types &amp; SLA
+        </h3>
+        <AdminIssueTypes issueTypes={issueTypes ?? []} />
       </section>
-      <section>
-        <h3 className="text-md font-medium text-zinc-800 dark:text-zinc-200 mb-4">SLA rules</h3>
-        <AdminSlaRules slaRules={slaRules ?? []} issueTypes={issueTypes ?? []} canEdit={isAdmin} />
-      </section>
+
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         <Link href="/dashboard" className="font-medium hover:underline">
           ← Back to dashboard

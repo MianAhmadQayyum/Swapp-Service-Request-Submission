@@ -1,47 +1,30 @@
 import { createClient } from "@/lib/supabase/server";
 import DashboardReportsClient from "./DashboardReportsClient";
 
-export default async function DashboardReports() {
+export default async function DashboardReports({ teamId }) {
   const supabase = await createClient();
-  const { data: tickets } = await supabase
-    .from("tickets")
-    .select(
-      "id, status, sla_breached, created_at, resolved_at, issue_types(name), suppliers(name), created_by, assigned_to"
-    );
-
-  const list = tickets ?? [];
-  const resolvedList = list.filter((t) => t.resolved_at);
-  const withinSla = resolvedList.filter((t) => !t.sla_breached);
-  const breached = list.filter((t) => t.sla_breached);
-
-  const byIssueType = {};
-  const bySupplier = {};
-  list.forEach((t) => {
-    const it = t.issue_types?.name ?? "Other";
-    byIssueType[it] = (byIssueType[it] ?? 0) + 1;
-    const sup = t.suppliers?.name ?? "Other";
-    bySupplier[sup] = (bySupplier[sup] ?? 0) + 1;
+  const { data, error } = await supabase.rpc("get_ticket_stats", {
+    p_team_id: teamId || null,
   });
 
-  let avgResolutionHours = null;
-  if (resolvedList.length > 0) {
-    const totalMs = resolvedList.reduce(
-      (acc, t) => acc + (new Date(t.resolved_at) - new Date(t.created_at)),
-      0
-    );
-    avgResolutionHours = (totalMs / (1000 * 60 * 60 * resolvedList.length)).toFixed(1);
-  }
+  if (error) throw new Error(error.message);
+  if (!data) return null;
 
   return (
     <DashboardReportsClient
-      totalTickets={list.length}
-      openTickets={list.filter((t) => !["resolved", "closed"].includes(t.status)).length}
-      resolvedTickets={resolvedList.length}
-      withinSlaCount={withinSla.length}
-      breachedCount={breached.length}
-      avgResolutionHours={avgResolutionHours}
-      byIssueType={byIssueType}
-      bySupplier={bySupplier}
+      total={data.total ?? 0}
+      open={(data.in_progress ?? 0) + (data.waiting_for_supplier ?? 0) + (data.waiting_for_customer ?? 0)}
+      resolved={data.resolved ?? 0}
+      inProgress={data.in_progress ?? 0}
+      waitingSupplier={data.waiting_for_supplier ?? 0}
+      waitingCustomer={data.waiting_for_customer ?? 0}
+      ticketsWithSla={data.tickets_with_sla ?? 0}
+      withinSla={data.within_sla ?? 0}
+      breachedSla={data.breached_sla ?? 0}
+      breachedUnresolved={data.breached_unresolved ?? 0}
+      avgResolutionHours={data.avg_resolution_hours ?? null}
+      bySupplier={data.by_supplier ?? {}}
+      byIssueType={data.by_issue_type ?? {}}
     />
   );
 }

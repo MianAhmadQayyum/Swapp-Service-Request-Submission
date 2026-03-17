@@ -48,10 +48,11 @@ export const getCachedProfile = cache(async () => {
   const user = await getCachedUser();
   if (!user) return null;
   const supabase = await createClient();
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("role, team_id, name, disabled, teams(name)")
     .eq("id", user.id)
     .single();
+  console.log("PROFILE DEBUG:", { userId: user.id, profile, error });
   return profile;
 });

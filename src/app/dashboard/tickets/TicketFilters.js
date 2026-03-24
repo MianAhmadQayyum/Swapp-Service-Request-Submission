@@ -15,6 +15,68 @@ export default function TicketFilters({ currentFilter, supplierId, suppliers, te
     router.push(`/dashboard/tickets?${p.toString()}`);
   }
 
+  const statusFiltersParam = searchParams?.get("status_filters") || "";
+  const tagFiltersParam = searchParams?.get("tag_filters") || "";
+
+  const statusFilterKeys = new Set(
+    statusFiltersParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+
+  const tagFilterKeys = new Set(
+    tagFiltersParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+
+  function toggleFilter(value) {
+    const p = new URLSearchParams(searchParams?.toString() || "");
+
+    // Clearing \"All\" resets all status/tag filters and legacy filter.
+    if (!value) {
+      p.delete("status_filters");
+      p.delete("tag_filters");
+      p.delete("filter");
+      p.delete("page");
+      router.push(`/dashboard/tickets?${p.toString()}`);
+      return;
+    }
+
+    const isTag = value === "escalated" || value === "service_request";
+
+    const key = isTag ? "tag_filters" : "status_filters";
+    const current = (p.get(key) || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const set = new Set(current);
+    if (set.has(value)) set.delete(value);
+    else set.add(value);
+
+    if (set.size === 0) p.delete(key);
+    else p.set(key, Array.from(set).join(","));
+
+    // Clear legacy single filter and page when using multi-select buttons.
+    p.delete("filter");
+    p.delete("page");
+
+    router.push(`/dashboard/tickets?${p.toString()}`);
+  }
+
+  function isActive(value) {
+    if (!value) {
+      return statusFilterKeys.size === 0 && tagFilterKeys.size === 0;
+    }
+    if (value === "escalated" || value === "service_request") {
+      return tagFilterKeys.has(value);
+    }
+    return statusFilterKeys.has(value);
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-4">
       <div className="flex flex-wrap gap-2">
@@ -22,9 +84,9 @@ export default function TicketFilters({ currentFilter, supplierId, suppliers, te
           <button
             key={f.value || "all"}
             type="button"
-            onClick={() => setParam("filter", f.value)}
+            onClick={() => toggleFilter(f.value)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              currentFilter === f.value
+              isActive(f.value)
                 ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
                 : "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600"
             }`}

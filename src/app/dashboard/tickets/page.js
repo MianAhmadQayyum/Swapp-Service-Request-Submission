@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient, getCachedUser, getCachedProfile } from "@/lib/supabase/server";
 import TicketFilters from "./TicketFilters";
 import TicketTable from "./TicketTable";
-import { FILTER_APPLY } from "@/lib/constants/tickets";
+import { FILTER_APPLY, STATUS_FILTER_STATUS_VALUES, TAG_FILTER_FIELDS } from "@/lib/constants/tickets";
 import { DEFAULT_ROLE, canCreateTickets, canAccessAdmin, isTeamMember } from "@/lib/constants/roles";
 
 const PAGE_SIZE = 25;
@@ -19,12 +19,16 @@ export default async function TicketsPage({ searchParams }) {
   const userCanCreate = canCreateTickets(role);
 
   const params = await searchParams;
-  const filter     = params?.filter ?? "";
-  const supplierId = params?.supplier ?? "";
-  const teamId     = canAccessAdmin(role) ? (params?.team ?? "") : "";
-  const sort       = VALID_SORT_COLS.includes(params?.sort) ? params.sort : "created_at";
-  const dir        = params?.dir === "asc" ? "asc" : "desc";
-  const page       = Math.max(0, parseInt(params?.page ?? "0", 10));
+  const filter              = params?.filter ?? ""; // legacy single filter
+  const supplierId          = params?.supplier ?? "";
+  const teamId              = canAccessAdmin(role) ? (params?.team ?? "") : "";
+  const statusFiltersParam  = params?.status_filters ?? "";
+  const tagFiltersParam     = params?.tag_filters ?? "";
+  const escalatedLegacy     = params?.escalated ?? "";
+  const serviceReqLegacy    = params?.service_request ?? "";
+  const sort                = VALID_SORT_COLS.includes(params?.sort) ? params.sort : "created_at";
+  const dir                 = params?.dir === "asc" ? "asc" : "desc";
+  const page                = Math.max(0, parseInt(params?.page ?? "0", 10));
 
   let query = supabase
     .from("tickets")
@@ -44,8 +48,50 @@ export default async function TicketsPage({ searchParams }) {
     query = query.eq("assignee_team_id", profile.team_id);
   }
 
-  if (FILTER_APPLY[filter]) {
-    query = FILTER_APPLY[filter](query);
+  // Parse multi-select filters from comma-separated params.
+  let statusFilterKeys = (statusFiltersParam || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  let tagFilterKeys = (tagFiltersParam || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // Backwards compatibility: if no new-style filters are set, fall back to legacy params.
+  if (statusFilterKeys.length === 0 && tagFilterKeys.length === 0) {
+    if (filter && STATUS_FILTER_STATUS_VALUES[filter]) {
+      statusFilterKeys = [filter];
+    } else if (filter && TAG_FILTER_FIELDS[filter]) {
+      tagFilterKeys = [filter];
+    }
+    if (escalatedLegacy === "yes" && !tagFilterKeys.includes("escalated")) {
+      tagFilterKeys.push("escalated");
+    }
+    if (serviceReqLegacy === "yes" && !tagFilterKeys.includes("service_request")) {
+      tagFilterKeys.push("service_request");
+    }
+  }
+
+  // Apply combined status filters as a single status IN (...) clause where possible.
+  const statusValuesSet = new Set();
+  for (const key of statusFilterKeys) {
+    const values = STATUS_FILTER_STATUS_VALUES[key];
+    if (values?.length) {
+      values.forEach((v) => statusValuesSet.add(v));
+    }
+  }
+  if (statusValuesSet.size > 0) {
+    query = query.in("status", Array.from(statusValuesSet));
+  }
+
+  // Apply tag filters (Escalated, Service Request) as boolean conditions.
+  if (tagFilterKeys.includes("escalated")) {
+    query = query.eq("escalation_status", true);
+  }
+  if (tagFilterKeys.includes("service_request")) {
+    query = query.eq("service_request_status", true);
   }
 
   if (supplierId) query = query.eq("supplier_id", supplierId);
@@ -64,9 +110,11 @@ export default async function TicketsPage({ searchParams }) {
   // Build sort URLs — preserve current filter/supplier/team, reset page
   function sortUrl(col) {
     const p = new URLSearchParams();
-    if (filter)     p.set("filter", filter);
-    if (supplierId) p.set("supplier", supplierId);
-    if (teamId)     p.set("team", teamId);
+    if (filter)             p.set("filter", filter);
+    if (supplierId)         p.set("supplier", supplierId);
+    if (teamId)             p.set("team", teamId);
+    if (statusFilterKeys.length) p.set("status_filters", statusFilterKeys.join(","));
+    if (tagFilterKeys.length)    p.set("tag_filters", tagFilterKeys.join(","));
     p.set("sort", col);
     p.set("dir", sort === col && dir === "asc" ? "desc" : "asc");
     return `/dashboard/tickets?${p.toString()}`;
@@ -75,9 +123,11 @@ export default async function TicketsPage({ searchParams }) {
   // Build page URLs — preserve current filter/supplier/team/sort
   function pageUrl(p) {
     const sp = new URLSearchParams();
-    if (filter)        sp.set("filter", filter);
-    if (supplierId)    sp.set("supplier", supplierId);
-    if (teamId)        sp.set("team", teamId);
+    if (filter)             sp.set("filter", filter);
+    if (supplierId)         sp.set("supplier", supplierId);
+    if (teamId)             sp.set("team", teamId);
+    if (statusFilterKeys.length) sp.set("status_filters", statusFilterKeys.join(","));
+    if (tagFilterKeys.length)    sp.set("tag_filters", tagFilterKeys.join(","));
     if (sort !== "created_at") sp.set("sort", sort);
     if (dir  !== "desc")       sp.set("dir", dir);
     if (p > 0)         sp.set("page", p);

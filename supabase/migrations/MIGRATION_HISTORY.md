@@ -19,6 +19,8 @@ All schema changes are applied via numbered SQL files. Apply them in order (001 
 | 009 | `009_schema.sql` | **Full v2 schema** (enums, teams, RLS, triggers) |
 | 010 | `010_indexes.sql` | Performance indexes |
 | 011 | `011_stats_rpc.sql` | `get_ticket_stats()` RPC with SLA + team filter |
+| 012 | `012_fix_admin_policy_recursion.sql` | Fix profiles admin policy recursion via `get_my_role()` |
+| 013 | `013_issue_types_catalog.sql` | Canonical `issue_types` titles + SLA hours; prune unused types |
 
 ---
 

@@ -55,7 +55,7 @@ Issue categories with optional SLA resolution limits.
 | `sla_resolution_hours_limit` | numeric nullable | Hours; must be > 0; NULL means no SLA for this type |
 | `created_at` | timestamptz | |
 
-Seeded with 28+ categories.
+Canonical catalog and SLAs are applied in migration `013_issue_types_catalog.sql` (53 titles: Handovers, Service Requests & Replacements, Payments, Handbacks, KYC & Pre-Booking, Care Handling, Other). Older rows not in that list are deleted only when no ticket references them.
 
 ### `public.tickets`
 

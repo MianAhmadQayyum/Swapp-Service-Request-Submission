@@ -32,6 +32,7 @@ export const FILTERS = [
   { value: "waiting_customer", label: "Awaiting — Customer" },
   { value: "resolved",         label: "Resolved" },
   { value: "escalated",        label: "Escalated" },
+  { value: "service_request",  label: "Service Requests" },
 ];
 
 // Maps a filter value to a function that applies the right Supabase query constraint.
@@ -43,4 +44,21 @@ export const FILTER_APPLY = {
   waiting_customer: (q) => q.eq("status", "waiting_for_customer"),
   resolved:         (q) => q.eq("status", "resolved"),
   escalated:        (q) => q.eq("escalation_status", true),
+  service_request:  (q) => q.eq("service_request_status", true),
+};
+
+// Helpers for multi-select filters on the tickets page.
+// Maps a status filter key to the underlying ticket.status values it represents.
+export const STATUS_FILTER_STATUS_VALUES = {
+  open:             ["in_progress", "waiting_for_supplier", "waiting_for_customer"],
+  in_progress:      ["in_progress"],
+  waiting_supplier: ["waiting_for_supplier"],
+  waiting_customer: ["waiting_for_customer"],
+  resolved:         ["resolved"],
+};
+
+// Tag filters that correspond to boolean columns on tickets.
+export const TAG_FILTER_FIELDS = {
+  escalated:       { field: "escalation_status", value: true },
+  service_request: { field: "service_request_status", value: true },
 };
